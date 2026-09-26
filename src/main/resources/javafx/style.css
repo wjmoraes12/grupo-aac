@@ -1,0 +1,87 @@
+.root {
+    -fx-font-family: "Segoe UI", "Helvetica Neue", sans-serif;
+    -fx-background-color: #eeece4;
+}
+
+.barra-superior {
+    -fx-background-color: #e3e0d4;
+    -fx-border-color: #d8d5c8;
+    -fx-border-width: 0 0 2 0;
+}
+
+.scroll-grade {
+    -fx-background-color: transparent;
+    -fx-background: transparent;
+}
+
+.campo-frase {
+    -fx-background-color: #fbfaf6;
+    -fx-background-radius: 14;
+    -fx-border-color: #d8d5c8;
+    -fx-border-radius: 14;
+    -fx-border-width: 2;
+    -fx-font-size: 18px;
+    -fx-padding: 10 14 10 14;
+}
+
+.campo-frase:focused {
+    -fx-border-color: #2b2a26;
+}
+
+.botao-falar {
+    -fx-background-color: #2b2a26;
+    -fx-text-fill: #fbfaf6;
+    -fx-background-radius: 14;
+    -fx-font-size: 18px;
+    -fx-padding: 10 16 10 16;
+    -fx-cursor: hand;
+}
+
+.botao-secundario {
+    -fx-background-color: #fbfaf6;
+    -fx-border-color: #d8d5c8;
+    -fx-border-width: 2;
+    -fx-background-radius: 14;
+    -fx-border-radius: 14;
+    -fx-font-size: 18px;
+    -fx-padding: 10 16 10 16;
+    -fx-cursor: hand;
+}
+
+.botao-falar:hover, .botao-secundario:hover {
+    -fx-opacity: 0.9;
+}
+
+.picto {
+    -fx-background-color: #fbfaf6;
+    -fx-background-radius: 18;
+    -fx-border-radius: 18;
+    -fx-border-width: 3;
+    -fx-cursor: hand;
+}
+
+.picto.tipo-s {
+    -fx-border-color: #c96a2e;
+}
+
+.picto.tipo-v {
+    -fx-border-color: #3f7a4d;
+}
+
+.picto:hover {
+    -fx-effect: dropshadow(gaussian, rgba(43,42,38,0.25), 8, 0, 0, 2);
+}
+
+.picto .sem-imagem {
+    -fx-font-size: 40px;
+    -fx-min-width: 120;
+    -fx-min-height: 120;
+    -fx-alignment: center;
+    -fx-background-color: #e3e0d4;
+    -fx-background-radius: 10;
+}
+
+.rotulo {
+    -fx-font-size: 16px;
+    -fx-font-weight: bold;
+}

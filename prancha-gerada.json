@@ -1,0 +1,13 @@
+{
+  "pedidoOriginal" : "chocolate",
+  "itens" : [ {
+    "palavra" : "chocolate",
+    "tipo" : "s"
+  }, {
+    "palavra" : "dançar",
+    "tipo" : "v"
+  }, {
+    "palavra" : "festa",
+    "tipo" : "s"
+  } ]
+}
