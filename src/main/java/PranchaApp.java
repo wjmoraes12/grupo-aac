@@ -54,8 +54,7 @@ public class PranchaApp extends Application {
 
         for (ItemPalavra item : todos) {
 
-            boolean tem =
-                    temImagem(item);
+            boolean tem = temImagem(item);
 
             System.out.println(
                     "  - "
@@ -69,20 +68,15 @@ public class PranchaApp extends Application {
             );
         }
 
-        FlowPane grade =
-                new FlowPane(16, 16);
+        FlowPane grade = new FlowPane(16, 16);
 
         grade.setPadding(new Insets(20));
 
         for (ItemPalavra item : itens) {
-
-            grade.getChildren().add(
-                    montarCard(item)
-            );
+            grade.getChildren().add(montarCard(item));
         }
 
         if (itens.isEmpty()) {
-
             Label vazio =
                     new Label(
                             todos.isEmpty()
@@ -95,38 +89,30 @@ public class PranchaApp extends Application {
             grade.getChildren().add(vazio);
         }
 
-        ScrollPane scroll =
-                new ScrollPane(grade);
+        ScrollPane scroll = new ScrollPane(grade);
 
         scroll.setFitToWidth(true);
         scroll.getStyleClass().add("scroll-grade");
 
-        campoFrase.setPromptText(
-                "Digite ou clique nos pictogramas..."
-        );
+        campoFrase.setPromptText("Digite ou clique nos pictogramas...");
 
         campoFrase.getStyleClass().add("campo-frase");
 
         HBox.setHgrow(campoFrase, javafx.scene.layout.Priority.ALWAYS);
 
-        Button botaoFalar =
-                new Button("🔊 Falar");
+        Button botaoFalar = new Button("🔊 Falar");
 
         botaoFalar.getStyleClass().add("botao-falar");
 
-        botaoFalar.setOnAction(
-                e -> falar(campoFrase.getText())
-        );
+        botaoFalar.setOnAction(e -> falar(campoFrase.getText()));
 
-        Button botaoApagar =
-                new Button("⌫");
+        Button botaoApagar = new Button("⌫");
 
         botaoApagar.getStyleClass().add("botao-secundario");
 
         botaoApagar.setOnAction(e -> apagarUltimaPalavra());
 
-        Button botaoLimpar =
-                new Button("🗑");
+        Button botaoLimpar = new Button("🗑");
 
         botaoLimpar.getStyleClass().add("botao-secundario");
 
@@ -145,18 +131,14 @@ public class PranchaApp extends Application {
         barraSuperior.setPadding(new Insets(14));
         barraSuperior.getStyleClass().add("barra-superior");
 
-        BorderPane raiz =
-                new BorderPane();
+        BorderPane raiz = new BorderPane();
 
         raiz.setTop(barraSuperior);
         raiz.setCenter(scroll);
 
-        Scene cena =
-                new Scene(raiz, 960, 680);
+        Scene cena = new Scene(raiz, 960, 680);
 
-        cena.getStylesheets().add(
-                getClass().getResource("/javafx/style.css").toExternalForm()
-        );
+        cena.getStylesheets().add(getClass().getResource("/javafx/style.css").toExternalForm());
 
         stage.setScene(cena);
         stage.setTitle("Minha Prancha");
@@ -167,17 +149,15 @@ public class PranchaApp extends Application {
 
     private static String normalizarNomeArquivo(String palavra) {
 
-        String semAcento =
-                java.text.Normalizer.normalize(
-                        palavra,
-                        java.text.Normalizer.Form.NFD
+        String semAcento = java.text.Normalizer.normalize(
+                palavra,
+                java.text.Normalizer.Form.NFD
                 ).replaceAll("\\p{M}", "");
 
         return semAcento;
     }
 
     private static boolean temImagem(ItemPalavra item) {
-
         return Files.exists(
                 PASTA_IMAGENS.resolve(
                         normalizarNomeArquivo(item.palavra()) + ".png"
@@ -187,8 +167,7 @@ public class PranchaApp extends Application {
 
     private VBox montarCard(ItemPalavra item) {
 
-        VBox card =
-                new VBox(6);
+        VBox card = new VBox(6);
 
         card.getStyleClass().addAll(
                 "picto",
@@ -217,16 +196,13 @@ public class PranchaApp extends Application {
 
         card.getChildren().add(imageView);
 
-        Label rotulo =
-                new Label(item.palavra());
+        Label rotulo = new Label(item.palavra());
 
         rotulo.getStyleClass().add("rotulo");
 
         card.getChildren().add(rotulo);
 
-        card.setOnMouseClicked(
-                e -> adicionarPalavra(item)
-        );
+        card.setOnMouseClicked(e -> adicionarPalavra(item));
 
         return card;
     }
@@ -238,11 +214,9 @@ public class PranchaApp extends Application {
      */
     private void adicionarPalavra(ItemPalavra item) {
 
-        int posicao =
-                campoFrase.getCaretPosition();
+        int posicao = campoFrase.getCaretPosition();
 
-        String textoAtual =
-                campoFrase.getText();
+        String textoAtual = campoFrase.getText();
 
         boolean precisaEspacoAntes =
                 posicao > 0
@@ -262,18 +236,15 @@ public class PranchaApp extends Application {
 
     private void apagarUltimaPalavra() {
 
-        String texto =
-                campoFrase.getText().stripTrailing();
+        String texto = campoFrase.getText().stripTrailing();
 
         if (texto.isBlank()) {
-
             campoFrase.clear();
 
             return;
         }
 
-        int ultimoEspaco =
-                texto.lastIndexOf(' ');
+        int ultimoEspaco = texto.lastIndexOf(' ');
 
         String restante =
                 ultimoEspaco >= 0
@@ -299,9 +270,7 @@ public class PranchaApp extends Application {
         }
 
         try {
-
-            new ProcessBuilder("say", "-v", "Luciana", texto)
-                    .start();
+            new ProcessBuilder("say", "-v", "Luciana", texto).start();
 
         } catch (Exception e) {
 
@@ -317,8 +286,7 @@ public class PranchaApp extends Application {
             Path arquivo
     ) throws Exception {
 
-        List<ItemPalavra> resultado =
-                new ArrayList<>();
+        List<ItemPalavra> resultado = new ArrayList<>();
 
         if (!Files.exists(arquivo)) {
 
