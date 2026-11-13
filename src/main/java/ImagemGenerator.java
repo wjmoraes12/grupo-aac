@@ -1,13 +1,20 @@
-import javax.imageio.ImageIO;
-import java.awt.image.BufferedImage;
 import java.io.BufferedReader;
-import java.io.File;
 import java.io.InputStreamReader;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
+/**
+ * Executa a geração local de uma imagem e valida que o arquivo foi criado.
+ *
+ * A classe delega a difusão ao executável sd-cli em vez de carregar o modelo
+ * dentro da JVM. Isso mantém a integração pequena e compatível com a instalação
+ * local existente, mas cada foto inicia um processo novo e depende dos caminhos
+ * específicos abaixo. O modelo também é carregado novamente a cada chamada.
+ */
 public class ImagemGenerator {
 
+    // Caminho local adotado pelo projeto. A vantagem é não exigir download em
+    // toda execução; a desvantagem é que outra instalação precisa ajustar o caminho.
     private static final Path SD_CLI =
             Path.of(
                     System.getProperty("user.home"),
@@ -17,6 +24,8 @@ public class ImagemGenerator {
                     "sd-cli"
             );
 
+    // O SD 1.5 foi mantido para aproveitar o modelo que já existe no computador.
+    // Ele é leve em comparação com modelos maiores, mas pode errar detalhes visuais.
     private static final Path MODEL =
             Path.of(
                     System.getProperty("user.home"),
@@ -25,13 +34,14 @@ public class ImagemGenerator {
                     "v1-5-pruned-emaonly.safetensors"
             );
 
-    /*
-     * Limiar de luminância (0-255) usado no pós-processamento.
-     * Pixels mais claros que isso viram branco puro,
-     * mais escuros viram preto puro.
+    /**
+     * Gera uma foto para a descrição visual em inglês recebida em {@code palavra}.
+     * O destino é sobrescrito pelo sd-cli se já existir.
+     *
+     * @param palavra descrição curta do assunto principal, preparada em acc.java
+     * @param destino caminho PNG associado à palavra portuguesa da prancha
+     * @throws Exception se os arquivos locais faltarem ou o processo falhar
      */
-    private static final int LIMIAR_THRESHOLD = 170;
-
     public static void gerar(
             String palavra,
             Path destino
@@ -41,6 +51,8 @@ public class ImagemGenerator {
 
         Files.createDirectories(destino.getParent());
 
+        // A descrição principal e a lista negativa são mantidas separadas porque
+        // o sd-cli trata cada uma com pesos diferentes durante a amostragem.
         String prompt = criarPrompt(palavra);
         String negativePrompt = criarNegativePrompt();
 
@@ -51,6 +63,12 @@ public class ImagemGenerator {
         System.out.println("Destino: " + destino);
         System.out.println("=================================");
 
+        // 512x512 corresponde à resolução nativa do SD 1.5 e reduz o consumo
+        // de memória. O custo é menos detalhe que um modelo e uma resolução maiores.
+        // DPM++ 2M com 35 etapas favorece acabamento; em CPU, cada foto pode demorar.
+        // CFG 7 mantém aderência ao assunto sem forçar tanto o prompt.
+        // Seed -1 pede uma seed aleatória. A seed padrão fixa do sd-cli repetia
+        // a composição entre palavras; aleatoriedade evita isso, mas reduz repetibilidade.
         ProcessBuilder processBuilder =
                 new ProcessBuilder(
                         SD_CLI.toString(),
@@ -71,18 +89,22 @@ public class ImagemGenerator {
                         "512",
 
                         "--steps",
-                        "25",
+                        "35",
 
                         "--cfg-scale",
-                        "9",
+                        "7",
 
                         "--sampling-method",
-                        "euler_a",
+                        "dpm++2m",
+
+                        "--seed",
+                        "-1",
 
                         "-o",
                         destino.toString()
                 );
 
+        // Reúne stdout e stderr para que o log do processo apareça numa única sequência.
         processBuilder.redirectErrorStream(true);
 
         Process processo = processBuilder.start();
@@ -125,17 +147,17 @@ public class ImagemGenerator {
         }
 
         System.out.println(
-                "Aplicando pós-processamento (threshold preto/branco)..."
-        );
-
-        aplicarThreshold(destino);
-
-        System.out.println(
                 "Imagem gerada com sucesso: "
                         + destino
         );
     }
 
+    /**
+     * Confere os pré-requisitos antes de iniciar um processo demorado.
+     *
+     * A verificação local preserva o modo offline e não envia o tema a terceiros;
+     * em contrapartida, não instala nem localiza automaticamente outros modelos.
+     */
     private static void validarArquivos() {
 
         if (!Files.exists(SD_CLI)) {
@@ -155,96 +177,41 @@ public class ImagemGenerator {
         }
     }
 
-    /*
-     * =========================================================
-     * PÓS-PROCESSAMENTO
-     * =========================================================
-     *
-     * O SD1.5 é um modelo fotorealista por natureza. Mesmo com
-     * prompt pedindo "flat vector icon", ele quase sempre deixa
-     * cinzas, sombras e ruído na imagem. Este passo converte a
-     * imagem para preto e branco puro, aproximando o resultado
-     * de um pictograma limpo, independente de quão "suja"
-     * a geração tenha saído.
+    /**
+     * Dá prioridade ao assunto no começo do prompt e pede uma fotografia colorida.
+     * O assunto grande em primeiro plano melhora a leitura em cartões pequenos;
+     * o cenário fica secundário para reduzir desvios sem remover todo o contexto real.
+     * Prompts orientam o modelo, mas não garantem que cada detalhe saia correto.
      */
-
-    private static void aplicarThreshold(
-            Path destino
-    ) throws Exception {
-
-        File arquivo = destino.toFile();
-
-        BufferedImage original = ImageIO.read(arquivo);
-
-        if (original == null) {
-
-            throw new RuntimeException(
-                    "Não foi possível ler a imagem gerada para pós-processar: "
-                            + destino
-            );
-        }
-
-        int largura = original.getWidth();
-        int altura = original.getHeight();
-
-        BufferedImage resultado =
-                new BufferedImage(
-                        largura,
-                        altura,
-                        BufferedImage.TYPE_INT_RGB
-                );
-
-        for (int y = 0; y < altura; y++) {
-
-            for (int x = 0; x < largura; x++) {
-
-                int rgb = original.getRGB(x, y);
-
-                int r = (rgb >> 16) & 0xFF;
-                int g = (rgb >> 8) & 0xFF;
-                int b = rgb & 0xFF;
-
-                double luminancia =
-                        (0.299 * r) + (0.587 * g) + (0.114 * b);
-
-                int corFinal =
-                        luminancia >= LIMIAR_THRESHOLD
-                                ? 0xFFFFFF
-                                : 0x000000;
-
-                resultado.setRGB(x, y, corFinal);
-            }
-        }
-
-        ImageIO.write(resultado, "png", arquivo);
-    }
-
     private static String criarPrompt(
             String palavra
     ) {
 
         return """
-                flat vector icon of %s, \
-                pictogram style, single isolated subject, \
-                solid black silhouette on white background, \
-                simple geometric shapes, bold outlines, \
-                2D flat design, icon set style, \
-                symmetrical, centered, minimal, \
-                clean vector art, no gradients, no shading, \
-                no text, no letters, no numbers, no watermark
+                Photorealistic documentary photograph. Main subject: %s. \
+                Show this exact subject large, clear, and in the foreground, filling most of the square frame. \
+                The subject must directly represent the named object, person, or action. \
+                Use only a simple, relevant everyday background; keep it secondary and unobtrusive. \
+                Natural daylight, realistic colors and materials, lifelike proportions, \
+                sharp focus on the subject, authentic camera photograph, medium shot. \
+                No text, captions, letters, numbers, labels, or watermark.
                 """.formatted(palavra);
     }
 
+    /**
+     * Afasta estilos de ícone e erros comuns de composição.
+     * Uma lista negativa muito extensa também pode suprimir elementos legítimos,
+     * por isso as restrições aqui são gerais e evitam descrever uma cena específica.
+     */
     private static String criarNegativePrompt() {
 
         return """
-                realistic, photorealistic, 3d render, photo, \
-                text, letters, numbers, words, watermark, signature, \
-                logo, multiple objects, cluttered, complex background, \
-                gradient, shading, texture, noise, blurry, \
-                low quality, low resolution, jpeg artifacts, \
-                distorted, deformed, disfigured, extra limbs, \
-                asymmetrical, cropped, out of frame, ugly, duplicate
+                icon, pictogram, symbol, clipart, illustration, drawing, cartoon, \
+                painting, sketch, 3d render, CGI, digital art, text, watermark, logo, \
+                unrelated main subject, unrelated scenery, distant tiny subject, \
+                window view, vast empty landscape, cluttered background, collage, \
+                blurry, low resolution, plastic skin, oversaturated colors, \
+                distorted anatomy, extra limbs, cropped subject, duplicate
                 """;
     }
 }

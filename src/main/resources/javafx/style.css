@@ -1,20 +1,28 @@
+/*
+ * Paleta compartilhada pelas duas abas. Fundo quente e cartões claros mantêm
+ * contraste sem usar branco puro em toda a tela; cores Fitzgerald ficam reservadas
+ * às bordas dos tipos gramaticais, evitando que a imagem perca destaque.
+ */
 .root {
     -fx-font-family: "Segoe UI", "Helvetica Neue", sans-serif;
     -fx-background-color: #eeece4;
 }
 
 .barra-superior {
+    /* A barra separa a frase editável das imagens sem adicionar uma navegação extra. */
     -fx-background-color: #e3e0d4;
     -fx-border-color: #d8d5c8;
     -fx-border-width: 0 0 2 0;
 }
 
 .scroll-grade {
+    /* Deixa o fundo da janela aparecer e preserva a rolagem da grade em telas menores. */
     -fx-background-color: transparent;
     -fx-background: transparent;
 }
 
 .campo-frase {
+    /* Área grande para digitação e leitura da frase; o tamanho ocupa espaço da barra. */
     -fx-background-color: #fbfaf6;
     -fx-background-radius: 14;
     -fx-border-color: #d8d5c8;
@@ -29,6 +37,7 @@
 }
 
 .botao-falar {
+    /* Botão principal escuro para destacar a ação de fala. */
     -fx-background-color: #2b2a26;
     -fx-text-fill: #fbfaf6;
     -fx-background-radius: 14;
@@ -38,6 +47,7 @@
 }
 
 .botao-secundario {
+    /* Ações auxiliares mantêm estilo claro para não competir com o botão de fala. */
     -fx-background-color: #fbfaf6;
     -fx-border-color: #d8d5c8;
     -fx-border-width: 2;
@@ -53,6 +63,7 @@
 }
 
 .picto {
+    /* Cartões grandes facilitam o toque; isso reduz quantos itens cabem por linha. */
     -fx-background-color: #fbfaf6;
     -fx-background-radius: 18;
     -fx-border-radius: 18;
@@ -61,18 +72,22 @@
 }
 
 .picto.tipo-s {
+    /* Fitzgerald key: laranja identifica substantivos. */
     -fx-border-color: #c96a2e;
 }
 
 .picto.tipo-v {
+    /* Fitzgerald key: verde identifica verbos. */
     -fx-border-color: #3f7a4d;
 }
 
 .picto:hover {
+    /* Realce visual confirma qual cartão está sob o ponteiro. */
     -fx-effect: dropshadow(gaussian, rgba(43,42,38,0.25), 8, 0, 0, 2);
 }
 
 .picto .sem-imagem {
+    /* Estilo de reserva para uma imagem ausente, caso a interface use esse estado. */
     -fx-font-size: 40px;
     -fx-min-width: 120;
     -fx-min-height: 120;
@@ -82,6 +97,59 @@
 }
 
 .rotulo {
+    /* O nome continua visível mesmo quando a fotografia não for óbvia. */
     -fx-font-size: 16px;
     -fx-font-weight: bold;
+}
+
+.tela-geracao {
+    /* Mantém a identidade visual da aba de criação. */
+    -fx-background-color: #eeece4;
+}
+
+.painel-geracao {
+    /* Um painel único agrupa tema, ações e progresso; é simples, mas não mostra
+       prévias enquanto a geração local está em andamento. */
+    -fx-background-color: #fbfaf6;
+    -fx-background-radius: 22;
+    -fx-border-color: #d8d5c8;
+    -fx-border-radius: 22;
+    -fx-border-width: 2;
+    -fx-padding: 30;
+}
+
+.titulo-geracao {
+    -fx-font-size: 28px;
+    -fx-font-weight: bold;
+    -fx-text-fill: #2b2a26;
+}
+
+.descricao-geracao {
+    -fx-font-size: 17px;
+    -fx-text-fill: #555248;
+}
+
+.botao-gerar {
+    /* Verde consistente com a cor dos verbos e reservado para iniciar o fluxo. */
+    -fx-background-color: #3f7a4d;
+    -fx-text-fill: white;
+    -fx-background-radius: 14;
+    -fx-font-size: 16px;
+    -fx-font-weight: bold;
+    -fx-padding: 12 18 12 18;
+    -fx-cursor: hand;
+}
+
+.botao-gerar:hover {
+    -fx-background-color: #32643e;
+}
+
+.botao-gerar:disabled {
+    -fx-opacity: 0.65;
+}
+
+.status-geracao {
+    /* Texto legível para informar passos que podem demorar vários minutos. */
+    -fx-font-size: 15px;
+    -fx-text-fill: #2b2a26;
 }
