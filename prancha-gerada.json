@@ -1,13 +1,13 @@
 {
-  "pedidoOriginal" : "chocolate",
+  "pedidoOriginal" : "Escola",
   "itens" : [ {
-    "palavra" : "chocolate",
+    "palavra" : "escola",
     "tipo" : "s"
   }, {
-    "palavra" : "dançar",
+    "palavra" : "brincar",
     "tipo" : "v"
   }, {
-    "palavra" : "festa",
-    "tipo" : "s"
+    "palavra" : "dormir",
+    "tipo" : "v"
   } ]
 }

@@ -17,29 +17,50 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Scanner;
 import java.util.Set;
+import java.util.function.Consumer;
 
+/**
+ * Pipeline local que transforma um tema em vocabulário, JSON e fotografias.
+ *
+ * O Ollama e o Stable Diffusion são executados na máquina do usuário, e o JSON
+ * junto com a pasta imagens/ conecta as etapas. Isso evita enviar dados à nuvem
+ * e permite abrir uma prancha pronta offline; o custo é instalar e manter dois
+ * modelos locais, além do tempo e da memória exigidos pela difusão.
+ */
 public class acc {
 
+    // Ollama escuta apenas na máquina local; a aplicação não envia temas a um serviço externo.
     private static final String OLLAMA_HOST =
             "http://localhost:11434";
 
+    // Modelo pequeno em português reduz memória e acelera a geração de vocabulário.
+    // A contrapartida é que traduções e classificações podem exigir validação extra.
     private static final String MODELO =
             "hf.co/tardellirs/aac-board-generator-770m-ptbr-GGUF:Q6_K";
 
+    // Um único ponto de configuração mantém a quantidade usada no prompt, no schema
+    // e na validação final sincronizada. Hoje a prancha pede três palavras.
     private static final int QUANTIDADE_PALAVRAS = 3;
 
+    // Gerar candidatos a mais dá opções para a seleção sem pedir vocabulário ilimitado.
+    // Mais candidatos aumentam o custo da chamada ao Ollama e o tamanho do prompt.
     private static final int QUANTIDADE_CANDIDATOS = 25;
 
+    // Repetições recuperam respostas JSON malformadas sem manter um loop indefinido.
     private static final int MAX_TENTATIVAS_JSON = 3;
 
+    // A interface usa as cores Fitzgerald: verbo e substantivo têm tratamentos distintos.
     private static final Set<String> TIPOS_PERMITIDOS =
             Set.of("v", "s");
 
+    // Um cliente reutilizado mantém as conexões e define um limite para a conexão inicial.
+    // As chamadas de geração têm timeout próprio, pois podem ser mais longas que a conexão.
     private static final HttpClient HTTP_CLIENT =
             HttpClient.newBuilder()
                     .connectTimeout(Duration.ofSeconds(30))
                     .build();
 
+    // Compartilhar o mapper evita criar conversores diferentes para o mesmo contrato JSON.
     private static final ObjectMapper MAPPER =
             new ObjectMapper();
 
@@ -51,6 +72,7 @@ public class acc {
             Path.of("imagens");
 
 
+    /** Fluxo de terminal legado: entrada, seleção, persistência e geração das imagens. */
     public static void main(String[] args) throws Exception {
 
         Scanner scanner = new Scanner(System.in);
@@ -78,6 +100,9 @@ public class acc {
          * =====================================================
          * ETAPA 1
          * =====================================================
+         * Produz uma lista ampla de candidatos. Separar geração e seleção ajuda
+         * o modelo pequeno a explorar o tema antes de escolher poucas palavras,
+         * mas exige duas chamadas de texto e acrescenta latência.
          */
 
         System.out.println();
@@ -116,6 +141,9 @@ public class acc {
          * =====================================================
          * ETAPA 2
          * =====================================================
+         * A segunda chamada seleciona e classifica. O resultado é validado abaixo;
+         * a validação estrutural protege o contrato, mas não prova que a palavra
+         * seja a melhor escolha semântica para toda pessoa usuária.
          */
 
         System.out.println();
@@ -174,6 +202,9 @@ public class acc {
          * =====================================================
          * CRIAÇÃO DA PRANCHA JSON
          * =====================================================
+         * O arquivo funciona como contrato entre CLI, JavaFX e gerador de imagem.
+         * Isso reduz o acoplamento entre etapas, mas mudanças no formato precisam
+         * ser refletidas em todos os leitores do JSON.
          */
 
         Prancha prancha =
@@ -222,6 +253,9 @@ public class acc {
          * =====================================================
          * ETAPA 3
          * =====================================================
+         * Cada foto é um processo local independente. O isolamento evita carregar
+         * o modelo de difusão dentro da aplicação Java, mas torna a geração por
+         * CPU lenta e repete a inicialização do modelo para cada palavra.
          */
 
         System.out.println();
@@ -231,7 +265,9 @@ public class acc {
 
 
         gerarImagens(
-                palavrasSelecionadas
+                palavrasSelecionadas,
+                pedido,
+                System.out::println
         );
 
 
@@ -263,15 +299,95 @@ public class acc {
     }
 
 
-    /*
-     * =========================================================
-     * GERA AS IMAGENS
-     * =========================================================
+    /**
+     * Gera o vocabulário localmente e salva o contrato consumido pelo JavaFX.
+     *
+     * A função também é chamada pela interface; o callback de progresso mantém
+     * a tela informada sem obrigar este serviço a depender de JavaFX. O tema é
+     * salvo antes das imagens para que uma falha de difusão não apague o vocabulário.
+     * O trade-off é que o JSON pode existir mesmo quando uma ou mais fotos falham.
      */
+    public static List<CandidatoIA> gerarVocabulario(
+            String pedido,
+            Consumer<String> progresso
+    ) throws Exception {
 
+        if (pedido == null || pedido.isBlank()) {
+            throw new IllegalArgumentException(
+                    "Descreva o tema da prancha antes de continuar."
+            );
+        }
+
+        Consumer<String> atualizarProgresso =
+                progresso == null ? mensagem -> { } : progresso;
+        String tema = pedido.strip();
+
+        atualizarProgresso.accept("Conectando ao Ollama local...");
+        verificarOllama();
+
+        atualizarProgresso.accept("Verificando o modelo de vocabulário...");
+        verificarModelo();
+
+        atualizarProgresso.accept("Criando vocabulário para a prancha...");
+        String candidatos = gerarCandidatos(tema);
+        List<CandidatoIA> selecionados =
+                selecionarPalavras(tema, candidatos);
+
+        if (selecionados.size() != QUANTIDADE_PALAVRAS) {
+            throw new IllegalStateException(
+                    "Não foi possível selecionar exatamente "
+                            + QUANTIDADE_PALAVRAS
+                            + " palavras válidas. Tente descrever o tema de outra forma."
+            );
+        }
+
+        Prancha prancha = new Prancha(tema, selecionados);
+        String json = MAPPER.writerWithDefaultPrettyPrinter()
+                .writeValueAsString(prancha);
+        Path arquivo = Path.of("prancha-gerada.json");
+        Files.writeString(arquivo, json, StandardCharsets.UTF_8);
+
+        atualizarProgresso.accept(
+                "Vocabulário pronto. Preparando "
+                        + selecionados.size()
+                        + " fotos..."
+        );
+        return selecionados;
+    }
+
+    /** Mantém compatibilidade com o fluxo de terminal e encaminha logs para stdout. */
     private static void gerarImagens(
             List<CandidatoIA> palavras
     ) throws Exception {
+
+        gerarImagens(palavras, "", System.out::println);
+    }
+
+    /** Gera imagens sem tema contextual quando o chamador não possui esse dado. */
+    public static void gerarImagens(
+            List<CandidatoIA> palavras,
+            Consumer<String> progresso
+    ) throws Exception {
+
+        gerarImagens(palavras, "", progresso);
+    }
+
+    /**
+     * Gera uma foto por item e informa o andamento ao chamador.
+     * A palavra em português continua sendo o nome do arquivo; o assunto da foto
+     * é descrito em inglês porque o modelo SD 1.5 responde melhor a esse idioma.
+     * O modelo é invocado por item para manter o contrato um PNG por palavra; o
+     * custo é uma geração lenta para cada imagem e a possibilidade de falha parcial.
+     */
+    public static void gerarImagens(
+            List<CandidatoIA> palavras,
+            String tema,
+            Consumer<String> progresso
+    ) throws Exception {
+
+        Consumer<String> atualizarProgresso =
+                progresso == null ? mensagem -> { } : progresso;
+        String contexto = tema == null ? "" : tema.strip();
 
         Files.createDirectories(
                 DIRETORIO_IMAGENS
@@ -306,19 +422,23 @@ public class acc {
 
             System.out.println();
 
-            System.out.println(
-                    "Imagem "
+            String mensagem =
+                    "Gerando foto "
                             + (i + 1)
                             + "/"
                             + palavras.size()
                             + ": "
-                            + palavra
-            );
+                            + palavra;
+
+            System.out.println(mensagem);
+            atualizarProgresso.accept(mensagem);
 
 
             String palavraEmIngles =
                     traduzirParaIngles(
-                            palavra
+                            palavra,
+                            item.tipo(),
+                            contexto
                     );
 
 
@@ -338,41 +458,56 @@ public class acc {
 
     /*
      * =========================================================
-     * TRADUZ A PALAVRA PARA INGLÊS ANTES DE USAR NO PROMPT
+     * PREPARA O ASSUNTO DA FOTO EM INGLÊS
      * =========================================================
      *
-     * O Stable Diffusion 1.5 foi treinado majoritariamente com
-     * prompts em inglês. Inserir a palavra em português direto
-     * no template em inglês faz o modelo não reconhecer o
-     * conceito e gerar composições genéricas sem relação com
-     * a palavra pedida. Este passo traduz antes de montar o
-     * prompt de imagem, mantendo o português para o nome do
-     * arquivo e para o JSON da prancha.
+     * O Stable Diffusion 1.5 responde melhor a prompts em inglês.
+     * Para verbos, a tradução descreve uma pessoa realizando a
+     * ação, ajudando a produzir uma fotografia concreta.
+     *
+     * Termos comuns usam descrições revisadas no código. Para os demais, o Ollama
+     * resolve a ambiguidade com o tema. A lista fixa é mais previsível, mas precisa
+     * de manutenção; o fallback cobre vocabulário novo, porém ainda pode errar.
      */
 
     private static String traduzirParaIngles(
-            String palavra
+            String palavra,
+            String tipo,
+            String tema
     ) throws Exception {
+
+        String descricaoConhecida =
+                descricaoVisualConhecida(palavra, tema);
+
+        if (descricaoConhecida != null) {
+            return descricaoConhecida;
+        }
 
         String prompt =
                 """
-                Translate the Portuguese word "%s" to a single common English word or short phrase, \
-                the one most suitable to represent it as a simple visual icon.
+                Create a short, exact English visual description for the Portuguese word "%s".
 
                 Rules:
-                - Respond with ONLY the English word or short phrase.
-                - Do not explain anything.
-                - Do not add punctuation, quotes or extra text.
-                - Do not repeat the Portuguese word.
+                - Grammatical type: %s (v means verb, s means noun).
+                - Board theme for choosing the correct meaning: "%s".
+                - Describe only the thing, person, or action named by the word, not a location or landscape.
+                - For a verb, show one person clearly performing that action.
+                - For a feeling or adjective, show a person clearly expressing it.
+                - For a noun, name one common, recognizable real-world example.
+                - Return only a concrete English phrase of two to six words.
+                - Never invent a farm, field, house, or other background unless that is the word.
+                - Do not explain or repeat the Portuguese word.
                 """.formatted(
-                        palavra
+                        palavra,
+                        tipo,
+                        tema.isBlank() ? "not specified" : tema
                 );
 
         String resposta =
                 chamarOllama(
                         prompt,
-                        32,
-                        0.1,
+                        48,
+                        0.0,
                         null
                 );
 
@@ -384,20 +519,68 @@ public class acc {
                                 ""
                         )
                         .split("\n")[0]
+                        .replaceFirst("(?i)^(english|subject|translation)\\s*:\\s*", "")
+                        .replaceFirst("^[\\-•*\\s]+", "")
                         .strip();
 
         if (limpa.isBlank()) {
-
-            System.out.println(
-                    "Falha ao traduzir '"
+            throw new IllegalStateException(
+                    "Não foi possível identificar uma cena visual para \""
                             + palavra
-                            + "', usando a palavra original."
+                            + "\". Nenhuma imagem foi gerada com um assunto incorreto."
             );
-
-            return palavra;
         }
 
         return limpa;
+    }
+
+    /**
+     * Mapeia palavras frequentes para assuntos visuais curtos e explícitos.
+     * Isso contorna traduções genéricas do modelo pequeno nos conceitos de CAA mais
+     * comuns. A contrapartida é cobertura limitada: uma palavra fora da lista usa
+     * a tradução contextual do Ollama definida logo acima.
+     */
+    private static String descricaoVisualConhecida(
+            String palavra,
+            String tema
+    ) {
+        String chave = normalizarNomeArquivo(palavra);
+        String contexto = normalizarNomeArquivo(tema);
+        boolean temaEscolar = contexto.contains("escola");
+
+        return switch (chave) {
+            case "escola" -> "the front entrance of a real school building";
+            case "brincar" -> temaEscolar
+                    ? "a child playing with colorful blocks in a school playground"
+                    : "a child playing with colorful toys";
+            case "feliz", "alegre" -> "a happy child smiling with a joyful expression";
+            case "triste" -> "a sad child with a tearful expression";
+            case "bravo", "irritado" -> "an angry child showing a clear frown";
+            case "medo", "assustado" -> "a frightened child showing a worried expression";
+            case "dancar" -> "a person dancing with their full body visible";
+            case "festa" -> "people celebrating a birthday party around a cake";
+            case "chocolate" -> "a chocolate bar broken into visible pieces";
+            case "casa" -> "the front of a family home";
+            case "estudar" -> temaEscolar
+                    ? "a student studying at a classroom desk"
+                    : "a student studying at a desk";
+            case "ler" -> "a child reading an open book";
+            case "escrever" -> "a child writing in a notebook with a pencil";
+            case "comer" -> "a person eating a meal at a table";
+            case "beber" -> "a person drinking water from a clear glass";
+            case "dormir" -> "a child sleeping peacefully in bed";
+            case "correr" -> "a child running outdoors with full body visible";
+            case "pular", "saltar" -> "a child jumping with full body visible";
+            case "bola" -> "a colorful ball on a playground";
+            case "livro" -> "an open illustrated children's book";
+            case "mochila" -> "a colorful school backpack";
+            case "professor", "professora" -> "a teacher standing in a classroom";
+            case "aluno", "aluna", "estudante" -> "a student sitting at a classroom desk";
+            case "agua" -> "a clear glass filled with drinking water";
+            case "cachorro" -> "a friendly dog sitting and looking at the camera";
+            case "gato" -> "a domestic cat sitting and looking at the camera";
+            default -> null;
+        };
     }
 
 
@@ -416,6 +599,9 @@ public class acc {
      *      ↓
      * "acao"
      *
+     * A normalização funciona em nomes simples com acentos e espaços, mas palavras
+     * diferentes podem colidir após perder acentos ou pontuação. O contrato atual
+     * aceita esse risco para manter nomes legíveis e portáveis entre sistemas.
      */
 
     private static String normalizarNomeArquivo(
@@ -453,6 +639,11 @@ public class acc {
     }
 
 
+    /**
+     * Confirma que o serviço local responde antes de iniciar as chamadas de texto.
+     * Esse teste rápido melhora a mensagem de erro, embora não garanta que o modelo
+     * esteja instalado nem que uma geração futura vá terminar com sucesso.
+     */
     private static void verificarOllama()
             throws Exception {
 
@@ -496,6 +687,11 @@ public class acc {
     }
 
 
+    /**
+     * Procura o nome exato do modelo no Ollama e baixa-o se estiver ausente.
+     * O download automático simplifica a primeira execução; em troca, exige rede
+     * e espaço em disco nessa primeira vez. Depois disso, a geração é local.
+     */
     private static void verificarModelo()
             throws Exception {
 
@@ -653,6 +849,11 @@ public class acc {
     }
 
 
+    /**
+     * Pede uma lista de opções relacionadas ao tema, sem exigir JSON nesta etapa.
+     * Texto livre é mais simples para o modelo pequeno produzir; a seleção posterior
+     * é quem impõe o formato estruturado e a quantidade final.
+     */
     private static String gerarCandidatos(
             String pedido
     ) throws Exception {
@@ -686,6 +887,11 @@ public class acc {
     }
 
 
+    /**
+     * Escolhe exatamente N candidatos e solicita um tipo gramatical permitido.
+     * O schema reduz respostas malformadas e as tentativas recuperam falhas leves.
+     * A validação abaixo ainda é necessária, pois formato válido não garante sentido.
+     */
     private static List<CandidatoIA> selecionarPalavras(
             String pedido,
             String candidatos
@@ -809,6 +1015,11 @@ public class acc {
     }
 
 
+    /**
+     * Monta o JSON Schema aceito pelo endpoint Ollama.
+     * Declarar enum e tamanho no próprio pedido evita depender só de instruções em
+     * texto; a checagem Java continua como segunda barreira para modelos incompatíveis.
+     */
     private static Map<String, Object>
     construirEsquemaSelecao() {
 
@@ -922,6 +1133,11 @@ public class acc {
     }
 
 
+    /**
+     * Envia uma geração não transmitida em partes e devolve apenas o texto produzido.
+     * O modo não-streaming simplifica parsing e validação; o custo é a interface não
+     * receber tokens parciais. O Task do JavaFX mantém a janela responsiva durante a espera.
+     */
     private static String chamarOllama(
             String prompt,
             int maxTokens,
@@ -1079,6 +1295,11 @@ public class acc {
     }
 
 
+    /**
+     * Converte apenas itens com palavra alfabética, tipo permitido e chave única.
+     * Rejeitar itens malformados mantém o formato seguro para a interface; a regra
+     * de uma palavra sem hífen limita expressões compostas que poderiam ser úteis.
+     */
     private static List<CandidatoIA> parseRespostaIA(
             String resposta
     ) {
@@ -1247,6 +1468,11 @@ public class acc {
     }
 
 
+    /**
+     * Tolera cercas Markdown e texto introdutório comuns em respostas de LLM.
+     * Procurar o primeiro e o último delimitador é simples, mas uma resposta com
+     * JSON extra pode continuar ambígua e será rejeitada pelo parser.
+     */
     private static String extrairJSON(
             String resposta
     ) {
@@ -1303,6 +1529,7 @@ public class acc {
     }
 
 
+    /** Remove marcadores de modelo e cercas de código antes do parsing ou uso do texto. */
     private static String limparTokensEspeciais(
             String texto
     ) {
@@ -1345,6 +1572,11 @@ public class acc {
     }
 
 
+    /**
+     * Limita o texto candidato para controlar o tamanho do prompt de seleção.
+     * Isso protege o custo e o limite de contexto do modelo; se a lista for longa,
+     * o truncamento pode descartar candidatos que apareceram no final.
+     */
     private static String limitarTexto(
             String texto,
             int limite
@@ -1367,13 +1599,22 @@ public class acc {
     }
 
 
-    private record CandidatoIA(
+    /**
+     * Par palavra/tipo que atravessa as etapas de geração e a interface.
+     * O tipo é guardado como "v" ou "s" para manter o JSON pequeno e compatível
+     * com a cor aplicada à palavra na prancha.
+     */
+    public record CandidatoIA(
             String palavra,
             String tipo
     ) {
     }
 
 
+    /**
+     * Formato persistido em prancha-gerada.json. Guardar o pedido original junto
+     * dos itens permite contextualizar a geração de imagens numa rodada posterior.
+     */
     private record Prancha(
             String pedidoOriginal,
             List<CandidatoIA> itens

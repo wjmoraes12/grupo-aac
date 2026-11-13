@@ -18,26 +18,26 @@ RF05 — O sistema deve validar a resposta da IA e reter apenas o formato exato 
 Geração de imagens (ImagemGenerator.java, duas linhas de implementação)
 
 
-RF06 — O sistema deve produzir um pictograma (PNG) por palavra da prancha.
+RF06 — O sistema deve produzir uma fotografia colorida (PNG) por palavra da prancha.
 
 RF07 — (variante ARASAAC) Buscar e baixar o pictograma correspondente de um banco público de símbolos de CAA.
 
-RF07-alt — (variante Stable Diffusion local) Gerar a imagem localmente via modelo de difusão, traduzindo a palavra para inglês antes do prompt e aplicando pós-processamento (threshold preto/branco) para aproximar de um pictograma limpo.
+RF07-alt — (variante Stable Diffusion local) Gerar a imagem localmente via modelo de difusão, traduzindo a palavra ou ação para inglês e usando prompts fotográficos. Preservar as cores e texturas da foto, sem converter para ícone ou aplicar threshold preto/branco.
 
 RF08 — O nome do arquivo de imagem deve ser normalizado (sem acentos) para casar de forma confiável com a palavra da prancha.
 
 
 Interface de comunicação (PranchaApp.java)
 
-RF09 — Exibir em grade apenas os pictogramas que possuem imagem já gerada/baixada.
+RF09 — Exibir em grade apenas as imagens que já foram geradas/baixadas.
 
-RF10 — Cada pictograma deve ser codificado visualmente por tipo gramatical (Fitzgerald key: substantivo laranja, verbo verde).
+RF10 — Cada imagem deve ser codificada visualmente por tipo gramatical (Fitzgerald key: substantivo laranja, verbo verde).
 
-RF11 — Clicar em um pictograma deve inserir a palavra na posição do cursor de um campo de texto editável.
+RF11 — Clicar em uma imagem deve inserir a palavra na posição do cursor de um campo de texto editável.
 
 RF12 — O usuário deve poder digitar diretamente no mesmo campo, intercalando com cliques.
 
-RF13 — Clicar em um pictograma deve disparar a fala da palavra em voz alta (síntese de voz em pt-BR).
+RF13 — Clicar em uma imagem deve disparar a fala da palavra em voz alta (síntese de voz em pt-BR).
 
 RF14 — Deve haver controles para falar a frase completa, apagar a última palavra e limpar tudo.
 
@@ -51,7 +51,7 @@ RNF02 (Disponibilidade offline) — Depois de gerada a prancha, o app JavaFX dev
 
 RNF03 (Portabilidade) — Atualmente não atende: say -v Luciana é exclusivo macOS; a geração de imagem via Stable Diffusion local depende de um binário (sd-cli) compilado e um caminho fixo em ~/stable-diffusion.cpp, ambos amarrados ao ambiente do desenvolvedor.
 
-RNF04 (Desempenho) — Geração de vocabulário deve responder em segundos (modelo de texto 770M); geração de imagem por difusão é ordens de magnitude mais lenta (steps=25, CPU/GPU local) — não é uma operação "interativa".
+RNF04 (Desempenho) — Geração de vocabulário deve responder em segundos (modelo de texto 770M); geração de imagem por difusão é ordens de magnitude mais lenta (35 etapas por foto, CPU/GPU local) — não é uma operação "interativa".
 
 RNF05 (Confiabilidade) — O formato de saída da IA (JSON) deve ser validado estruturalmente (JSON Schema/structured outputs) porque o modelo de 770M não segue instruções de formato de forma confiável em texto livre.
 
